@@ -1,67 +1,109 @@
-//jshint esversion:6
 const express = require("express");
 const bodyParser = require("body-parser");
+const mongoose = require("mongoose");
+const date = require(__dirname + "/date.js");
 
 
 const app = express();
 
-let items = ["Buy food","Cook food","Eat food"]; // it goes form item as string to item as array so we can store more item in it
-let workItem =[];
 
-
-app.set('view engine','ejs');//this line make ejs work(this line says we set viewengion as ejs)
-app.set('views',"./views");// this line is seting the path of viewsfile
+app.set('view engine','ejs');
+app.set('views',"./views");
 
 app.use(bodyParser.urlencoded({extended:true}));
-app.use(express.static('public'))
+app.use(express.static('public'));
+
+//setting connextion
+mongoose.connect("mongodb://localhost:27017/todolistDB")
+
+//creating schema
+
+const itemSchema = new mongoose.Schema({
+    name: String
+});
+
+// mongoose model
+const Item = mongoose.model("Item",itemSchema)
+
+const item1 = new Item({
+    name : "welcome to our to do list"
+});
+
+const item2 = new Item({
+    name : "Hit the + button to add an new item."
+});
+
+const item3 = new Item({
+    name : "<-- Hit this to delete an item."
+});
+
+const defauletItems = [item1, item2, item3];
+
+// Item.insertMany(defauletItems,function(err){
+//     if(err){
+//         console.log(err);
+//     }else{
+//         console.log("Sucessfully saved defaukt item to DB")
+//     }
+// })
+
+
 
 app.get("/",function(req,res){
 
-    let today = new Date(); //new Date() create a new date object
+    let day = date.getDate();
+
+    Item.find(function(err,foundItems){
+    
+        if(foundItems.length === 0) {
+            Item.insertMany(defauletItems,function(err){
+            if(!err){
+            console.log("Sucessfully saved defaukt item to DB");
+            }   
+            });
+            res.redirect("/")
+             }else{
+                res.render("list",{listTitle : day, newListItems : foundItems});
+             }
+
+        });
     
 
-    let option ={
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long'
 
-    }
-    let day = today.toLocaleDateString("en-US",option)
-
-    res.render("list",{listTitle : day, newListItems : items});// we got error that item is not defined because it was a local variabel
 
 });
 
 app.post("/",function(req,res){
     
-    console.log(req.body)
     
-    // item = req.body.newItem; // this is a local variabe so we have to declare it golbally so we make an empty vae = item on top
-    let item = req.body.newItem; //this time we pe push item intp itmes
+    const itemName = req.body.newItem;
 
-    if(req.body.list === "newList"){
-        workItem.push(item)
-        res.redirect("/work")
-    }else{
-        items.push(item);//pushing item into items so we can store more item
-    // console.log(items)
-    return res.redirect("/");
-    }
-    
+    const item = new Item({
+        name: itemName
+    });
 
+    item.save();
+    res.redirect("/")//it willshow data on the page frome DB
+    });
+
+app.post("/delete",function(req,res){
+    const checkedItemId = req.body.checkbox
+
+    Item.findByIdAndRemove(checkedItemId,function(err){
+        if(err){
+            console.log(err)
+        } else {
+            console.log("sucessfully deleted")
+            res.redirect('/');
+        }
+        });
     });
 
 
 app.get("/work",function(req,res){
-    res.render("list",{listTitle: "Work list" , newListItems : workItem})
+    res.render("list",{listTitle: "Work list" , newListItems : workItem});
 });
 
-app.post("/work", function(req,res){
-    let item = req.body.newItem
-    workItem.push(item)
-    res.redirect("/work")
-    
-});
 
 app.get("/about",function(req,res){
     res.render("about");

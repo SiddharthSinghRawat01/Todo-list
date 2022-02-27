@@ -1,6 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
+const _ = require("lodash");
 const date = require(__dirname + "/date.js");
 
 
@@ -37,66 +38,114 @@ const item3 = new Item({
     name : "<-- Hit this to delete an item."
 });
 
-const defauletItems = [item1, item2, item3];
+const defaultItems = [item1, item2, item3];
 
-// Item.insertMany(defauletItems,function(err){
-//     if(err){
-//         console.log(err);
-//     }else{
-//         console.log("Sucessfully saved defaukt item to DB")
-//     }
-// })
+const listSchema = {
+    name: String,
+    items: [itemSchema]
+}
+
+const List = mongoose.model("List",listSchema);
+
+
 
 
 
 app.get("/",function(req,res){
 
-    let day = date.getDate();
+    // let day = date.getDate();
 
     Item.find(function(err,foundItems){
     
         if(foundItems.length === 0) {
-            Item.insertMany(defauletItems,function(err){
+            Item.insertMany(defaultItems,function(err){
             if(!err){
-            console.log("Sucessfully saved defaukt item to DB");
+            console.log("Sucessfully saved default item to DB");
             }   
             });
             res.redirect("/")
              }else{
-                res.render("list",{listTitle : day, newListItems : foundItems});
+                res.render("list",{listTitle : "TODAY!", newListItems : foundItems});
              }
 
         });
     
+});
 
+app.get('/:coustomeListName',function(req,res){
+    const coustomeListName = _.capitalize(req.params.coustomeListName);
+    //capitlise no == we use capitalize
+    
 
+    List.findOne({name: coustomeListName},function(err,foundlist){
+        if(!err){
+            if(!foundlist){
+    
+                //creat new list
+                const list = new List({
+                    name: coustomeListName,
+                    items: defaultItems
+                });
+                list.save();
+                res.redirect("/" + coustomeListName);
+            } else {
+
+                //show existing list
+                res.render("list",{listTitle : foundlist.name, newListItems : foundlist.items});
+            }
+        }
+    })
 
 });
+
+
 
 app.post("/",function(req,res){
     
     
     const itemName = req.body.newItem;
+    const listName = req.body.list;
 
     const item = new Item({
         name: itemName
     });
 
-    item.save();
+    if(listName === "TODAY!"){
+        item.save();
     res.redirect("/")//it willshow data on the page frome DB
+    } else {
+        List.findOne({name: listName}, function(err,foundlist){
+         foundlist.items.push(item);
+         foundlist.save();
+         res.redirect("/" + listName)
+        })
+    }
+
+    
     });
 
 app.post("/delete",function(req,res){
     const checkedItemId = req.body.checkbox
+    const listName = req.body.listName   // this "listName" is different from what we used above it is for check box and 
 
-    Item.findByIdAndRemove(checkedItemId,function(err){
-        if(err){
-            console.log(err)
-        } else {
-            console.log("sucessfully deleted")
-            res.redirect('/');
-        }
-        });
+    if(listName === "TODAY!"){
+        Item.findByIdAndRemove(checkedItemId,function(err){
+            if(err){
+                console.log(err)
+            } else {
+                console.log("sucessfully deleted")
+                res.redirect('/');
+            }
+            });
+    } else {
+        List.findOneAndUpdate({name: listName},{$pull : {items: {_id: checkedItemId}}},function(err,foundlist){
+// above we used pull method of mongoose and findOne and update from JS which is collection.findOneAndUpdat({id},{update},callback) update = $pull    
+            if(!err){
+                res.redirect('/' + listName);
+            }
+        })
+    }
+    
     });
 
 
